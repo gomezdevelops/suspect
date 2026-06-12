@@ -1,75 +1,65 @@
-const { SlashCommandBuilder } = require("discord.js");
+const { EmbedBuilder } = require("discord.js");
 const GameManager = require("../games/GameManager");
-const startGame = require("../utils/startGame");
-const sendWords = require("../utils/sendWords");
-const startRound = require("../utils/startRound");
-const { gameStarted } = require("../utils/embeds");
+const startGame   = require("../utils/startGame");
+const sendWords   = require("../utils/sendWords");
+const startRound  = require("../utils/startRound");
+const { gameStarted, COLOR } = require("../utils/embeds");
 
 module.exports = {
-    data: new SlashCommandBuilder()
-        .setName("start")
-        .setDescription("Start an Imposter game")
-        .addStringOption(option =>
-            option
-                .setName("mode")
-                .setDescription("Game mode")
-                .setRequired(true)
-                .addChoices(
-                    { name: "Normal", value: "normal" },
-                    { name: "Hidden", value: "hidden" }
-                )
-        ),
+    name: "start",
+    description: "Start the game  —  =start normal  or  =start hidden",
 
-    async execute(interaction) {
+    async execute(message, args) {
 
-        const game =
-            GameManager.get(interaction.channelId);
+        const mode = (args[0] || "").toLowerCase();
+
+        if (mode !== "normal" && mode !== "hidden") {
+            return message.reply("❌ Please specify a mode: `=start normal` or `=start hidden`");
+        }
+
+        const game = GameManager.get(message.channelId);
 
         if (!game) {
-            return interaction.reply({
-                content: "❌ No lobby found. Use `/enter` first.",
-                ephemeral: true
-            });
+            return message.reply("❌ No lobby found. Use `=enter` first.");
         }
 
         if (game.state !== "LOBBY") {
-            return interaction.reply({
-                content: "❌ A game is already running.",
-                ephemeral: true
-            });
+            return message.reply("❌ A game is already running.");
         }
 
         if (game.players.length < 4) {
-            return interaction.reply({
-                content: "❌ At least 4 players are required.",
-                ephemeral: true
-            });
+            return message.reply("❌ At least 4 players are required.");
         }
 
-        game.mode = interaction.options.getString("mode");
+        game.mode = mode;
 
         startGame(game);
 
-        // Defer immediately so we don't hit the 3-second deadline
-        // while sendWords DMs every player
-        await interaction.deferReply();
+        // Send a "sending DMs…" holding message so the channel doesn't go silent
+        const holdingMsg = await message.channel.send({
+            embeds: [
+                new EmbedBuilder()
+                    .setColor(COLOR)
+                    .setDescription("📨 Sending words to all players…")
+            ]
+        });
 
         try {
-            await sendWords(game, interaction.guild);
+            await sendWords(game, message.guild);
         } catch (error) {
             console.error(error);
-            return interaction.editReply({
-                content: "❌ Failed to send DMs. Make sure all players have DMs enabled."
-            });
+            await holdingMsg.delete().catch(() => {});
+            return message.reply("❌ Failed to send DMs. Make sure all players have DMs enabled.");
         }
 
         game.state = "ROUND";
 
-        await interaction.editReply({
+        await holdingMsg.delete().catch(() => {});
+
+        await message.channel.send({
             embeds: [gameStarted(game.players.length, game.mode)]
         });
 
-        // startRound uses channel.send so it's independent of the interaction
-        await startRound(interaction, game);
+        await startRound(message, game);
     }
 };

@@ -1,23 +1,17 @@
-const { SlashCommandBuilder } = require("discord.js");
 const { EmbedBuilder } = require("discord.js");
 const GameManager = require("../games/GameManager");
 const { COLOR } = require("../utils/embeds");
 
 module.exports = {
-    data: new SlashCommandBuilder()
-        .setName("status")
-        .setDescription("View game status"),
+    name: "status",
+    description: "View current game status",
 
-    async execute(interaction) {
+    async execute(message) {
 
-        const game =
-            GameManager.get(interaction.channelId);
+        const game = GameManager.get(message.channelId);
 
         if (!game) {
-            return interaction.reply({
-                content: "No active game.",
-                ephemeral: true
-            });
+            return message.reply("No active game.");
         }
 
         let currentTurn = "None";
@@ -25,8 +19,7 @@ module.exports = {
         if (game.state === "ROUND") {
             const currentPlayerId = game.order[game.currentTurn];
             if (currentPlayerId) {
-                const user =
-                    await interaction.client.users.fetch(currentPlayerId);
+                const user = await message.client.users.fetch(currentPlayerId);
                 currentTurn = user.username;
             }
         }
@@ -35,15 +28,12 @@ module.exports = {
             .setColor(COLOR)
             .setTitle("🎮 Game Status")
             .addFields(
-                { name: "State", value: game.state, inline: true },
-                { name: "Round", value: `${game.round}/3`, inline: true },
-                { name: "Players", value: String(game.players.length), inline: true },
-                { name: "Current Turn", value: currentTurn, inline: true }
+                { name: "State",        value: game.state,                  inline: true },
+                { name: "Round",        value: `${game.round}/3`,           inline: true },
+                { name: "Players",      value: String(game.players.length), inline: true },
+                { name: "Current Turn", value: currentTurn,                 inline: true }
             );
 
-        await interaction.reply({
-            embeds: [embed],
-            ephemeral: true
-        });
+        await message.channel.send({ embeds: [embed] });
     }
 };

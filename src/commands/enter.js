@@ -1,31 +1,34 @@
-const { SlashCommandBuilder } = require("discord.js");
+const { EmbedBuilder } = require("discord.js");
 const GameManager = require("../games/GameManager");
+const { COLOR } = require("../utils/embeds");
 
 module.exports = {
-    data: new SlashCommandBuilder()
-        .setName("enter")
-        .setDescription("Join the game"),
+    name: "enter",
+    description: "Join the game lobby",
 
-    async execute(interaction) {
+    async execute(message) {
 
-        let game =
-            GameManager.get(interaction.channelId);
+        let game = GameManager.get(message.channelId);
 
         if (!game) {
-            game = GameManager.create(interaction.channelId);
+            game = GameManager.create(message.channelId);
         }
 
-        if (game.players.includes(interaction.user.id)) {
-            return interaction.reply({
-                content: "You already joined.",
-                ephemeral: true
-            });
+        if (game.state !== "LOBBY") {
+            return message.reply("❌ A game is already running. Wait for it to finish.");
         }
 
-        game.players.push(interaction.user.id);
+        if (game.players.includes(message.author.id)) {
+            return message.reply("You already joined.");
+        }
 
-        await interaction.reply(
-            `✅ ${interaction.user.username} joined.\nPlayers: ${game.players.length}`
-        );
+        game.players.push(message.author.id);
+
+        const embed = new EmbedBuilder()
+            .setColor(COLOR)
+            .setDescription(`✅ **${message.author.username}** joined the lobby.`)
+            .setFooter({ text: `Players: ${game.players.length}` });
+
+        await message.channel.send({ embeds: [embed] });
     }
 };
