@@ -33,6 +33,7 @@ function buildHelp() {
                     "`=guess <word>` / `/guess <word>` — Imposter last-chance guess",
                     "`=status` / `/status` — View current game status",
                     "`=leaderboard` / `/leaderboard` — Top 10 players",
+                    "`=profile` / `/profile` — View your stats & rank",
                     "`=help` / `/help` — Show this message",
                 ].join("\n"),
             },
@@ -63,7 +64,7 @@ function buildHelp() {
             {
                 name: "⏱️ Timers",
                 value: [
-                    "• **30s** per clue turn (auto-skip on expiry)",
+                    "• **60s** per clue turn (auto-skip on expiry)",
                     "• **60s** discussion phase (vote to skip with `=skip`)",
                     "• **60s** voting phase (abstentions counted on expiry)",
                     "• **30s** Imposter last-chance guess window",

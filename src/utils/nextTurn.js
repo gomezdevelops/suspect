@@ -1,7 +1,7 @@
-const { roundStart, nextTurnEmbed, discussionPhaseEmbed } = require("./embeds");
+const { roundStart, discussionPhaseEmbed } = require("./embeds");
 const { scheduleTurnTimer } = require("./startRound");
 
-const TURN_SECONDS = 30;
+const TURN_SECONDS = 60;
 
 module.exports = async function nextTurn(ctx, game) {
 
@@ -9,7 +9,11 @@ module.exports = async function nextTurn(ctx, game) {
     if (game.currentTurn < game.order.length) {
 
         const nextPlayer = game.order[game.currentTurn];
-        await ctx.channel.send({ embeds: [nextTurnEmbed(nextPlayer, TURN_SECONDS)] });
+
+        // Plain text so the mention actually pings and is visible
+        await ctx.channel.send(
+            `🎤 It's now <@${nextPlayer}>'s turn.\n⏱ ${TURN_SECONDS}s remaining`
+        );
         scheduleTurnTimer(ctx, game);
         return;
     }
@@ -18,7 +22,6 @@ module.exports = async function nextTurn(ctx, game) {
     game.currentTurn = 0;
     game.round++;
 
-    // Clear turn timer — round is over
     if (game.turnTimer)  { clearTimeout(game.turnTimer);  game.turnTimer  = null; }
     if (game._warnTimer) { clearTimeout(game._warnTimer); game._warnTimer = null; }
 
@@ -33,7 +36,11 @@ module.exports = async function nextTurn(ctx, game) {
         );
 
         await ctx.channel.send({ embeds: [roundStart(game.round, orderLines, game.order[0])] });
-        await ctx.channel.send({ embeds: [nextTurnEmbed(game.order[0], TURN_SECONDS)] });
+
+        // First turn of new round — plain text
+        await ctx.channel.send(
+            `🎤 It's now <@${game.order[0]}>'s turn.\n⏱ ${TURN_SECONDS}s remaining`
+        );
         scheduleTurnTimer(ctx, game);
         return;
     }
@@ -44,7 +51,6 @@ module.exports = async function nextTurn(ctx, game) {
 
     await ctx.channel.send({ embeds: [discussionPhaseEmbed()] });
 
-    // Auto-start voting after 60 seconds of discussion
     const startVoting = require("./startVoting");
     game.discussTimer = setTimeout(async () => {
         if (game.state !== "DISCUSSION") return;
