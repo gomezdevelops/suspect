@@ -1,17 +1,19 @@
 require("dotenv").config();
 
-const fs = require("fs");
+const fs   = require("fs");
 const path = require("path");
 
 const {
     Client,
     Collection,
-    GatewayIntentBits
+    GatewayIntentBits,
+    REST,
+    Routes
 } = require("discord.js");
 
-const GameManager = require("./games/GameManager");
-const nextTurn    = require("./utils/nextTurn");
-const handleVote  = require("./utils/handleVote");
+const GameManager  = require("./games/GameManager");
+const nextTurn     = require("./utils/nextTurn");
+const handleVote   = require("./utils/handleVote");
 const { clueSent } = require("./utils/embeds");
 
 const PREFIX = "=";
@@ -26,8 +28,10 @@ const client = new Client({
 
 client.commands = new Collection();
 
-const commandsPath  = path.join(__dirname, "commands");
-const commandFiles  = fs
+// ─── Load commands ────────────────────────────────────────────────────────────
+
+const commandsPath = path.join(__dirname, "commands");
+const commandFiles = fs
     .readdirSync(commandsPath)
     .filter(file => file.endsWith(".js"));
 
@@ -41,11 +45,39 @@ for (const file of commandFiles) {
     }
 }
 
-client.once("ready", () => {
+// ─── Ready — auto-register slash commands that have a `data` property ────────
+
+client.once("ready", async () => {
     console.log(`Logged in as ${client.user.tag}`);
+
+    const slashCommands = [];
+
+    for (const command of client.commands.values()) {
+        if (command.data) {
+            slashCommands.push(command.data.toJSON());
+        }
+    }
+
+    if (slashCommands.length === 0) return;
+
+    try {
+        const rest = new REST({ version: "10" })
+            .setToken(process.env.TOKEN);
+
+        await rest.put(
+            Routes.applicationCommands(client.user.id),
+            { body: slashCommands }
+        );
+
+        console.log(`Registered ${slashCommands.length} slash command(s): ${slashCommands.map(c => `/${c.name}`).join(", ")}`);
+
+    } catch (err) {
+        console.error("Failed to register slash commands:", err);
+    }
 });
 
-// ─── Message handler ────────────────────────────────────────────────────────
+// ─── Message handler (prefix commands + plain-text clue capture) ──────────────
+
 client.on("messageCreate", async message => {
     if (message.author.bot) return;
 
@@ -104,16 +136,29 @@ client.on("messageCreate", async message => {
     client.emit("nextTurn", message, game);
 });
 
-// ─── Button interactions (voting) ────────────────────────────────────────────
+// ─── Interaction handler (slash commands + vote buttons) ─────────────────────
+
 client.on("interactionCreate", async interaction => {
     try {
-        if (!interaction.isButton()) return;
 
-        const game = GameManager.get(interaction.channelId);
-        if (!game) return;
-        if (game.state !== "VOTING") return;
+        // ── Slash commands ────────────────────────────────────────────────────
+        if (interaction.isChatInputCommand()) {
+            const command = client.commands.get(interaction.commandName);
+            if (!command) return;
 
-        await handleVote(interaction, game);
+            await command.execute(interaction);
+            return;
+        }
+
+        // ── Vote buttons ──────────────────────────────────────────────────────
+        if (interaction.isButton()) {
+            const game = GameManager.get(interaction.channelId);
+            if (!game) return;
+            if (game.state !== "VOTING") return;
+
+            await handleVote(interaction, game);
+            return;
+        }
 
     } catch (error) {
         console.error(error);
@@ -134,6 +179,7 @@ client.on("interactionCreate", async interaction => {
 });
 
 // ─── nextTurn event ───────────────────────────────────────────────────────────
+
 client.on("nextTurn", async (message, game) => {
     try {
         await nextTurn(message, game);
