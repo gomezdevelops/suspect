@@ -1,65 +1,61 @@
-const { EmbedBuilder } = require("discord.js");
+const { SlashCommandBuilder, EmbedBuilder } = require("discord.js");
 const GameManager = require("../games/GameManager");
 const startGame   = require("../utils/startGame");
 const sendWords   = require("../utils/sendWords");
 const startRound  = require("../utils/startRound");
 const { gameStarted, COLOR } = require("../utils/embeds");
+const { user, channelId, reply, getArg, isSlash } = require("../utils/ctx");
 
 module.exports = {
     name: "start",
-    description: "Start the game  —  =start normal  or  =start hidden",
+    data: new SlashCommandBuilder()
+        .setName("start")
+        .setDescription("Start the game")
+        .addStringOption(o =>
+            o.setName("mode").setDescription("Game mode").setRequired(true)
+             .addChoices({ name: "Normal", value: "normal" }, { name: "Hidden", value: "hidden" })
+        ),
 
-    async execute(message, args) {
-
-        const mode = (args[0] || "").toLowerCase();
+    async execute(ctx, args = []) {
+        const mode = getArg(ctx, "mode", 0, args)?.toLowerCase();
+        const cid  = channelId(ctx);
 
         if (mode !== "normal" && mode !== "hidden") {
-            return message.reply("❌ Please specify a mode: `=start normal` or `=start hidden`");
+            return reply(ctx, { content: "❌ Specify a mode: `=start normal` or `=start hidden`", ephemeral: true });
         }
 
-        const game = GameManager.get(message.channelId);
-
-        if (!game) {
-            return message.reply("❌ No lobby found. Use `=enter` first.");
-        }
-
-        if (game.state !== "LOBBY") {
-            return message.reply("❌ A game is already running.");
-        }
-
-        if (game.players.length < 4) {
-            return message.reply("❌ At least 4 players are required.");
-        }
+        const game = GameManager.get(cid);
+        if (!game)                  return reply(ctx, { content: "❌ No lobby found. Use `=enter` first.", ephemeral: true });
+        if (game.state !== "LOBBY") return reply(ctx, { content: "❌ A game is already running.", ephemeral: true });
+        if (game.players.length < 4) return reply(ctx, { content: "❌ At least 4 players are required.", ephemeral: true });
 
         game.mode = mode;
-
         startGame(game);
 
-        // Send a "sending DMs…" holding message so the channel doesn't go silent
-        const holdingMsg = await message.channel.send({
-            embeds: [
-                new EmbedBuilder()
-                    .setColor(COLOR)
-                    .setDescription("📨 Sending words to all players…")
-            ]
-        });
+        // Defer slash, or send holding message for prefix
+        let holdingMsg = null;
+        if (isSlash(ctx)) {
+            await ctx.deferReply();
+        } else {
+            holdingMsg = await ctx.channel.send({
+                embeds: [new EmbedBuilder().setColor(COLOR).setDescription("📨 Sending words to all players…")]
+            });
+        }
 
         try {
-            await sendWords(game, message.guild);
-        } catch (error) {
-            console.error(error);
-            await holdingMsg.delete().catch(() => {});
-            return message.reply("❌ Failed to send DMs. Make sure all players have DMs enabled.");
+            await sendWords(game, ctx.guild);
+        } catch (err) {
+            console.error(err);
+            if (holdingMsg) await holdingMsg.delete().catch(() => {});
+            return reply(ctx, { content: "❌ Failed to send DMs. Make sure all players have DMs enabled." });
         }
 
         game.state = "ROUND";
 
-        await holdingMsg.delete().catch(() => {});
+        if (holdingMsg) await holdingMsg.delete().catch(() => {});
 
-        await message.channel.send({
-            embeds: [gameStarted(game.players.length, game.mode)]
-        });
+        await reply(ctx, { embeds: [gameStarted(game.players.length, game.mode, game.imposterIds.length)] });
 
-        await startRound(message, game);
+        await startRound(ctx, game);
     }
 };

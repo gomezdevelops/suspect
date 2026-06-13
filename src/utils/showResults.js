@@ -1,103 +1,106 @@
 const { EmbedBuilder } = require("discord.js");
-const GameManager = require("../games/GameManager");
-const { COLOR } = require("./embeds");
+const GameManager  = require("../games/GameManager");
+const StatsManager = require("./StatsManager");
+const { COLOR, COLOR_GREEN, COLOR_AMBER } = require("./embeds");
 
-module.exports =
-async function showResults(interaction, game) {
+module.exports = async function showResults(ctx, game) {
 
-    const voteCounts = {};
+    // Guard — only run once
+    if (game.state === "LAST_CHANCE" || game.state === "DONE") return;
 
-    for (const votedId of Object.values(game.votes)) {
-        voteCounts[votedId] = (voteCounts[votedId] || 0) + 1;
-    }
+    // Clear all remaining timers
+    clearAllTimers(game);
 
     // Disable voting buttons
     if (game.votingMessageId) {
         try {
-            const votingMessage =
-                await interaction.channel.messages.fetch(
-                    game.votingMessageId
-                );
-
-            const disabledRows =
-                votingMessage.components.map(row => ({
-                    type: row.type,
-                    components: row.components.map(button => ({
-                        type: button.data.type,
-                        style: button.data.style,
-                        label: button.data.label,
-                        custom_id: button.data.custom_id,
-                        disabled: true
-                    }))
-                }));
-
-            await votingMessage.edit({ components: disabledRows });
-
-        } catch (err) {
-            console.error("Failed to disable vote buttons:", err);
-        }
+            const votingMsg = await ctx.channel.messages.fetch(game.votingMessageId);
+            const disabledRows = votingMsg.components.map(row => ({
+                type: row.type,
+                components: row.components.map(b => ({
+                    type: b.data.type, style: b.data.style,
+                    label: b.data.label, custom_id: b.data.custom_id, disabled: true
+                }))
+            }));
+            await votingMsg.edit({ components: disabledRows });
+        } catch {}
     }
 
-    // Determine winner
+    // ── Tally votes (skip nulls/abstentions) ─────────────────────────────────
+    const voteCounts = {};
+    for (const playerId of game.players) voteCounts[playerId] = 0;
+    for (const votedId of Object.values(game.votes)) {
+        if (votedId) voteCounts[votedId] = (voteCounts[votedId] || 0) + 1;
+    }
+
     let highestVotes = 0;
     let winners = [];
-
-    for (const [playerId, votes] of Object.entries(voteCounts)) {
-        if (votes > highestVotes) {
-            highestVotes = votes;
-            winners = [playerId];
-        } else if (votes === highestVotes) {
-            winners.push(playerId);
-        }
+    for (const [pid, votes] of Object.entries(voteCounts)) {
+        if (votes > highestVotes)       { highestVotes = votes; winners = [pid]; }
+        else if (votes === highestVotes) { winners.push(pid); }
     }
 
-    const tie = winners.length > 1;
-    const imposterCaught = !tie && winners[0] === game.imposterId;
+    const tie = winners.length > 1 || highestVotes === 0;
 
-    const imposterUser =
-        await interaction.client.users.fetch(game.imposterId);
+    // Check if ALL winners are imposters
+    const impostersCaught = !tie && winners.every(w => game.imposterIds.includes(w));
 
-    // Vote tally lines
+    // ── Build vote lines ──────────────────────────────────────────────────────
     const voteLines = [];
     for (const playerId of game.players) {
-        const user = await interaction.client.users.fetch(playerId);
-        const votes = voteCounts[playerId] || 0;
-        const bar = "█".repeat(votes) || "—";
-        voteLines.push(`**${user.username}** ${bar} ${votes} vote(s)`);
+        const user   = await ctx.client.users.fetch(playerId);
+        const votes  = voteCounts[playerId] || 0;
+        const marker = game.imposterIds.includes(playerId) ? " 🎭" : "";
+        const bar    = votes > 0 ? "█".repeat(Math.min(votes, 10)) : "—";
+        voteLines.push(`**${user.username}**${marker} ${bar} ${votes}`);
     }
 
-    // Clue history fields — one field per round
+    // ── Clue history fields ───────────────────────────────────────────────────
     const clueFields = [];
     for (const round of Object.keys(game.clues)) {
         const lines = [];
-        for (const [playerId, clue] of Object.entries(game.clues[round])) {
-            const user = await interaction.client.users.fetch(playerId);
-            lines.push(`**${user.username}**: ${clue}`);
+        for (const [pid, clue] of Object.entries(game.clues[round])) {
+            const u = await ctx.client.users.fetch(pid);
+            lines.push(`**${u.username}**: ${clue}`);
         }
-        if (lines.length > 0) {
-            clueFields.push({
-                name: `Round ${round}`,
-                value: lines.join("\n"),
-                inline: false
-            });
+        if (lines.length) clueFields.push({ name: `Round ${round}`, value: lines.join("\n") });
+    }
+
+    // ── Imposter names ────────────────────────────────────────────────────────
+    const imposterNames = await Promise.all(
+        game.imposterIds.map(async id => {
+            const u = await ctx.client.users.fetch(id);
+            return u.username;
+        })
+    );
+
+    // ── Stats update (preliminary — will be overridden if last-chance succeeds) ──
+    // Track correct votes
+    for (const [voterId, votedId] of Object.entries(game.votes)) {
+        if (votedId && game.imposterIds.includes(votedId)) {
+            StatsManager.update(voterId, { correctVotes: 1 });
         }
     }
 
-    // Outcome
-    let outcomeTitle, outcomeDesc, outcomeColor;
+    // Track times voted out
+    for (const w of winners) {
+        if (!tie) StatsManager.update(w, { timesVotedOut: 1 });
+    }
 
+    // ── Build result embed ────────────────────────────────────────────────────
+    let outcomeTitle, outcomeDesc, outcomeColor;
     if (tie) {
         outcomeTitle = "⚠️ Tie Vote — Imposter Wins!";
-        outcomeDesc = "The vote was tied. The Imposter slips away.";
-        outcomeColor = 0xffa500;
-    } else if (imposterCaught) {
-        outcomeTitle = "✅ Crew Wins!";
-        outcomeDesc = "The Imposter was caught.";
-        outcomeColor = 0x00c853;
+        outcomeDesc  = "The vote was tied. The Imposters slip away.";
+        outcomeColor = COLOR_AMBER;
+    } else if (impostersCaught) {
+        outcomeTitle = "🎯 Imposters Caught!";
+        outcomeDesc  = `The crew voted out **${imposterNames.join(", ")}**!`;
+        outcomeColor = COLOR_GREEN;
     } else {
-        outcomeTitle = "🎉 Imposter Wins!";
-        outcomeDesc = "The crew voted incorrectly.";
-        outcomeColor = 0xe8001a;
+        outcomeTitle = "🎉 Imposters Win!";
+        outcomeDesc  = "The crew voted incorrectly.";
+        outcomeColor = COLOR;
     }
 
     const embed = new EmbedBuilder()
@@ -105,19 +108,65 @@ async function showResults(interaction, game) {
         .setTitle("📊 Vote Results")
         .addFields(
             { name: "Votes", value: voteLines.join("\n") },
-            { name: "🎭 Imposter", value: imposterUser.username, inline: true },
-            { name: "📝 Crew Word", value: game.commonWord, inline: true },
+            { name: "🎭 Imposter" + (imposterNames.length > 1 ? "s" : ""), value: imposterNames.join(", "), inline: true },
+            { name: "📝 Crew Word",     value: game.commonWord,   inline: true },
             { name: "🎯 Imposter Word", value: game.imposterWord, inline: true }
         );
 
-    if (clueFields.length > 0) {
-        embed.addFields({ name: "🗒️ Clue History", value: "\u200b" });
-        embed.addFields(clueFields);
+    if (clueFields.length) {
+        embed.addFields({ name: "🗒️ Clue History", value: "\u200b" }, ...clueFields);
     }
 
     embed.addFields({ name: outcomeTitle, value: outcomeDesc });
 
-    await interaction.channel.send({ embeds: [embed] });
+    await ctx.channel.send({ embeds: [embed] });
+
+    // ── Last Chance if imposters were caught ──────────────────────────────────
+    if (impostersCaught) {
+        game.impostersCaught = true;
+        game.state = "LAST_CHANCE";
+
+        const { lastChanceEmbed } = require("./embeds");
+        await ctx.channel.send({ embeds: [lastChanceEmbed(imposterNames)] });
+
+        const lastChance = require("./lastChance");
+        lastChance.startTimer(ctx, game);
+        return;
+    }
+
+    // ── Finalize game ─────────────────────────────────────────────────────────
+    await finalizeGame(ctx, game, impostersCaught, tie);
+};
+
+async function finalizeGame(ctx, game, impostersCaught, tie) {
+    // Update stats for all players
+    for (const playerId of game.players) {
+        const isImposter = game.imposterIds.includes(playerId);
+        const delta = { gamesPlayed: 1 };
+
+        if (tie) {
+            // Tie = imposter wins
+            if (isImposter) { delta.gamesWon = 1; delta.imposterWins = 1; }
+        } else if (impostersCaught) {
+            // Crew wins
+            if (!isImposter) { delta.gamesWon = 1; delta.crewWins = 1; }
+        } else {
+            // Imposters win
+            if (isImposter) { delta.gamesWon = 1; delta.imposterWins = 1; }
+        }
+
+        StatsManager.update(playerId, delta);
+    }
 
     GameManager.delete(game.channelId);
-};
+}
+
+function clearAllTimers(game) {
+    const keys = ["turnTimer", "_warnTimer", "votingTimer", "_votingWarn30", "_votingWarn10", "discussTimer", "lastChanceTimer"];
+    for (const k of keys) {
+        if (game[k]) { clearTimeout(game[k]); game[k] = null; }
+    }
+}
+
+module.exports.finalizeGame  = finalizeGame;
+module.exports.clearAllTimers = clearAllTimers;

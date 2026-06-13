@@ -1,34 +1,36 @@
-const { EmbedBuilder } = require("discord.js");
+const { SlashCommandBuilder, EmbedBuilder } = require("discord.js");
 const GameManager = require("../games/GameManager");
 const { COLOR } = require("../utils/embeds");
+const { user, channelId, reply } = require("../utils/ctx");
 
 module.exports = {
     name: "enter",
-    description: "Join the game lobby",
+    data: new SlashCommandBuilder()
+        .setName("enter")
+        .setDescription("Join the game lobby"),
 
-    async execute(message) {
+    async execute(ctx) {
+        const uid = user(ctx).id;
+        const cid = channelId(ctx);
 
-        let game = GameManager.get(message.channelId);
-
-        if (!game) {
-            game = GameManager.create(message.channelId);
-        }
+        let game = GameManager.get(cid);
+        if (!game) game = GameManager.create(cid);
 
         if (game.state !== "LOBBY") {
-            return message.reply("❌ A game is already running. Wait for it to finish.");
+            return reply(ctx, { content: "❌ A game is already running. Wait for it to finish.", ephemeral: true });
         }
 
-        if (game.players.includes(message.author.id)) {
-            return message.reply("You already joined.");
+        if (game.players.includes(uid)) {
+            return reply(ctx, { content: "❌ You already joined.", ephemeral: true });
         }
 
-        game.players.push(message.author.id);
+        game.players.push(uid);
 
         const embed = new EmbedBuilder()
             .setColor(COLOR)
-            .setDescription(`✅ **${message.author.username}** joined the lobby.`)
-            .setFooter({ text: `Players: ${game.players.length}` });
+            .setDescription(`✅ **${user(ctx).username}** joined the lobby.`)
+            .setFooter({ text: `Players in lobby: ${game.players.length}` });
 
-        await message.channel.send({ embeds: [embed] });
+        await reply(ctx, { embeds: [embed] });
     }
 };

@@ -1,15 +1,12 @@
-const fs = require("fs");
+const fs   = require("fs");
 const path = require("path");
 
 const words = [
     ...new Set(
-        fs.readFileSync(
-            path.join(__dirname, "../data/words.txt"),
-            "utf8"
-        )
-        .split("\n")
-        .map(word => word.trim().replace(/\d+$/, ""))
-        .filter(Boolean)
+        fs.readFileSync(path.join(__dirname, "../data/words.txt"), "utf8")
+          .split("\n")
+          .map(w => w.trim().replace(/\d+$/, ""))
+          .filter(Boolean)
     )
 ];
 
