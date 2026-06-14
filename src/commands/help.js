@@ -8,8 +8,8 @@ const {
 const { COLOR } = require("../utils/embeds");
 const { reply } = require("../utils/ctx");
 
-const INVITE_URL  = "https://discord.com/oauth2/authorize?client_id=1514691427370799154&permissions=2147871808&integration_type=0&scope=bot+applications.commands";
-const SUPPORT_URL = "https://discord.gg/ZGGxXAch4s";
+const INVITE_URL  = "https://discord.com/oauth2/authorize?client_id=1514691427370799154&permissions=8&integration_type=0&scope=bot+applications.commands";
+const SUPPORT_URL = "https://discord.gg/EKMaCVuJ9Y";
 const WEBSITE_URL = "https://suspect-bot.vercel.app/";
 
 function buildHelp() {
@@ -34,7 +34,9 @@ function buildHelp() {
                     "`=status` / `/status` — View current game status",
                     "`=leaderboard` / `/leaderboard` — Top 10 players",
                     "`=profile` / `/profile` — View your stats & rank",
-                    "`=help` / `/help` — Show this message",
+                    "`=giveaway` / `/giveaway` — Show the giveaway details",
+                    "`=invites` / `/invites` — View your support server invites",
+                    "`=invite-leaderboard` / `/invite-leaderboard` — Top inviters in the support server",
                 ].join("\n"),
             },
             {

@@ -2,7 +2,7 @@ const GameManager  = require("../games/GameManager");
 const StatsManager = require("./StatsManager");
 const { EmbedBuilder } = require("discord.js");
 const { COLOR, COLOR_GREEN } = require("./embeds");
-const { finalizeGame } = require("./showResults");
+const { finalizeGame, revealWords } = require("./showResults");
 
 const LAST_CHANCE_SECONDS = 30;
 
@@ -15,10 +15,13 @@ function startTimer(ctx, game) {
         await ctx.channel.send({
             embeds: [
                 new EmbedBuilder()
-                    .setColor(COLOR)
+                    .setColor(COLOR_GREEN)
                     .setDescription("⏰ Time's up! The Imposters failed to guess the crew word.\n\n✅ **Crew Wins!**")
             ]
         }).catch(() => {});
+
+        // Reveal words now that last chance is over
+        await revealWords(ctx, game).catch(() => {});
 
         await endLastChance(ctx, game, false);
     }, LAST_CHANCE_SECONDS * 1000);
@@ -27,7 +30,6 @@ function startTimer(ctx, game) {
 async function handleGuess(ctx, game, guesser, guessedWord) {
     if (game.state !== "LAST_CHANCE") return;
 
-    // Only imposters can guess
     const guesserUser = ctx.author ?? ctx.user;
     const guesserId   = guesserUser?.id ?? guesser?.id;
 
@@ -54,6 +56,9 @@ async function handleGuess(ctx, game, guesser, guessedWord) {
             ]
         });
 
+        // Reveal words after correct guess
+        await revealWords(ctx, game).catch(() => {});
+
         await endLastChance(ctx, game, true);
     } else {
         await ctx.channel.send({
@@ -69,17 +74,13 @@ async function handleGuess(ctx, game, guesser, guessedWord) {
 async function endLastChance(ctx, game, imposterWon) {
     game.state = "DONE";
 
-    // Stats — crew already got correctVotes etc in showResults
-    // Now update win/loss for the game outcome reversal
     for (const playerId of game.players) {
         const isImposter = game.imposterIds.includes(playerId);
         const delta = { gamesPlayed: 1 };
 
         if (imposterWon) {
-            // Imposter guessed right → imposters win
             if (isImposter) { delta.gamesWon = 1; delta.imposterWins = 1; }
         } else {
-            // Imposter failed → crew wins
             if (!isImposter) { delta.gamesWon = 1; delta.crewWins = 1; }
         }
 
