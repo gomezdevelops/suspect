@@ -1,6 +1,3 @@
-/**
- * Unified context helpers — work for both prefix Message and slash Interaction.
- */
 
 async function reply(ctx, payload) {
     if (typeof payload === "string") payload = { content: payload };

@@ -19,7 +19,6 @@ Try to blend in with the crew.`
                 await member.send(`📝 Your word: **${word}**`);
             }
         } else {
-            // Hidden mode — nobody is told their role, imposters don't know they're different
             await member.send(`📝 Your word: **${word}**`);
         }
     }

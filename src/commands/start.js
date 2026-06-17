@@ -31,8 +31,6 @@ module.exports = {
 
         game.mode = mode;
         startGame(game);
-
-        // Defer slash, or send holding message for prefix
         let holdingMsg = null;
         if (isSlash(ctx)) {
             await ctx.deferReply();

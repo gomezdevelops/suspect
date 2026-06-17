@@ -28,7 +28,6 @@ module.exports = async function handleVote(interaction, game) {
     // If every player has voted (no need to wait for timer)
     const allVoted = game.players.every(id => game.votes[id] !== undefined);
     if (allVoted) {
-        // Clear voting timers
         if (game.votingTimer)   { clearTimeout(game.votingTimer);   game.votingTimer   = null; }
         if (game._votingWarn30) { clearTimeout(game._votingWarn30); game._votingWarn30 = null; }
         if (game._votingWarn10) { clearTimeout(game._votingWarn10); game._votingWarn10 = null; }

@@ -3,7 +3,6 @@ const path = require("path");
 
 const INVITES_FILE = path.join(__dirname, "../data/invites.json");
 
-// In-memory cache of invite uses per guild: { guildId: { code: { uses, inviterId } } }
 const inviteCache = new Map();
 
 function loadData() {
@@ -16,13 +15,11 @@ function saveData(data) {
     fs.writeFileSync(INVITES_FILE, JSON.stringify(data, null, 2));
 }
 
-/** Get total invite count for a user */
 function getInviteCount(userId) {
     const data = loadData();
     return data[userId] ?? 0;
 }
 
-/** Get all invite counts, sorted desc */
 function getAllInvites() {
     return loadData();
 }

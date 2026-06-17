@@ -20,7 +20,6 @@ function startTimer(ctx, game) {
             ]
         }).catch(() => {});
 
-        // Reveal words now that last chance is over
         await revealWords(ctx, game).catch(() => {});
 
         await endLastChance(ctx, game, false);
@@ -56,7 +55,6 @@ async function handleGuess(ctx, game, guesser, guessedWord) {
             ]
         });
 
-        // Reveal words after correct guess
         await revealWords(ctx, game).catch(() => {});
 
         await endLastChance(ctx, game, true);

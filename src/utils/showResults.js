@@ -9,7 +9,6 @@ module.exports = async function showResults(ctx, game) {
 
     clearAllTimers(game);
 
-    // Disable voting buttons
     if (game.votingMessageId) {
         try {
             const votingMsg = await ctx.channel.messages.fetch(game.votingMessageId);
@@ -24,7 +23,6 @@ module.exports = async function showResults(ctx, game) {
         } catch {}
     }
 
-    // ── Tally votes ───────────────────────────────────────────────────────────
     const voteCounts = {};
     for (const playerId of game.players) voteCounts[playerId] = 0;
     for (const votedId of Object.values(game.votes)) {
@@ -40,7 +38,6 @@ module.exports = async function showResults(ctx, game) {
 
     const tie = winners.length > 1 || highestVotes === 0;
 
-    // ── Build vote lines ──────────────────────────────────────────────────────
     const voteLines = [];
     for (const playerId of game.players) {
         const u     = await ctx.client.users.fetch(playerId);
@@ -49,7 +46,6 @@ module.exports = async function showResults(ctx, game) {
         voteLines.push(`**${u.username}** ${bar} ${votes}`);
     }
 
-    // ── Clue history ──────────────────────────────────────────────────────────
     const clueFields = [];
     for (const round of Object.keys(game.clues)) {
         const lines = [];
@@ -60,17 +56,11 @@ module.exports = async function showResults(ctx, game) {
         if (lines.length) clueFields.push({ name: `Round ${round}`, value: lines.join("\n") });
     }
 
-    // ══════════════════════════════════════════════════════════════════════════
-    // FALSE IMPOSTER MODE
-    // ══════════════════════════════════════════════════════════════════════════
     if (game.mode === "false") {
         await showFalseImposterResults(ctx, game, voteLines, clueFields, winners, tie);
         return;
     }
 
-    // ══════════════════════════════════════════════════════════════════════════
-    // NORMAL / HIDDEN MODE
-    // ══════════════════════════════════════════════════════════════════════════
     const impostersCaught = !tie && winners.every(w => game.imposterIds.includes(w));
 
     const imposterNames = await Promise.all(
@@ -80,7 +70,6 @@ module.exports = async function showResults(ctx, game) {
         })
     );
 
-    // Stats — correct votes and times voted out
     for (const [voterId, votedId] of Object.entries(game.votes)) {
         if (votedId && game.imposterIds.includes(votedId)) {
             StatsManager.update(voterId, { correctVotes: 1 });
@@ -90,7 +79,6 @@ module.exports = async function showResults(ctx, game) {
         if (!tie) StatsManager.update(w, { timesVotedOut: 1 });
     }
 
-    // ── Result embed — NO word reveal yet (happens after last chance) ─────────
     let outcomeTitle, outcomeDesc, outcomeColor;
     if (tie) {
         outcomeTitle = "⚠️ Tie Vote — Imposter Wins!";
@@ -111,7 +99,6 @@ module.exports = async function showResults(ctx, game) {
         .setTitle("📊 Vote Results")
         .addFields({ name: "Votes", value: voteLines.join("\n") });
 
-    // Only reveal imposter identity now — NOT the words
     embed.addFields({
         name: "🎭 Imposter" + (imposterNames.length > 1 ? "s" : ""),
         value: imposterNames.join(", "),
@@ -125,7 +112,6 @@ module.exports = async function showResults(ctx, game) {
     embed.addFields({ name: outcomeTitle, value: outcomeDesc });
     await ctx.channel.send({ embeds: [embed] });
 
-    // ── Last chance (words revealed inside lastChance after it resolves) ──────
     if (impostersCaught) {
         game.impostersCaught = true;
         game.state = "LAST_CHANCE";
@@ -136,12 +122,10 @@ module.exports = async function showResults(ctx, game) {
         return;
     }
 
-    // Game over without last chance — reveal words now (imposter won/tied, no suspense left)
     await revealWords(ctx, game);
     await finalizeGame(ctx, game, impostersCaught, tie);
 };
 
-// ── Word reveal — sent after game conclusively ends ───────────────────────────
 async function revealWords(ctx, game) {
     const embed = new EmbedBuilder()
         .setColor(0x444444)
@@ -153,14 +137,12 @@ async function revealWords(ctx, game) {
     await ctx.channel.send({ embeds: [embed] });
 }
 
-// ─── False Imposter reveal ────────────────────────────────────────────────────
 async function showFalseImposterResults(ctx, game, voteLines, clueFields, winners, tie) {
 
     const mostVotedId   = tie ? null : winners[0];
     const fakeImposter  = await ctx.client.users.fetch(game.fakeImposterId);
     const mostVotedUser = mostVotedId ? await ctx.client.users.fetch(mostVotedId) : null;
 
-    // Step 1 — vote results (no word reveal, no role markers)
     const votesEmbed = new EmbedBuilder()
         .setColor(COLOR_AMBER)
         .setTitle("📊 Vote Results")
@@ -172,7 +154,6 @@ async function showFalseImposterResults(ctx, game, voteLines, clueFields, winner
 
     await ctx.channel.send({ embeds: [votesEmbed] });
 
-    // Step 2 — dramatic pause
     await new Promise(r => setTimeout(r, 3000));
 
     await ctx.channel.send({
@@ -186,7 +167,6 @@ async function showFalseImposterResults(ctx, game, voteLines, clueFields, winner
 
     await new Promise(r => setTimeout(r, 3000));
 
-    // Step 3 — THE reveal (words shown here since no last chance in false mode)
     const revealEmbed = new EmbedBuilder()
         .setColor(COLOR)
         .setTitle("🃏 There Was No Imposter.")
@@ -205,7 +185,6 @@ async function showFalseImposterResults(ctx, game, voteLines, clueFields, winner
 
     await new Promise(r => setTimeout(r, 2000));
 
-    // Step 4 — fake imposter callout
     const fakeEmbed = new EmbedBuilder()
         .setColor(COLOR_AMBER)
         .setTitle("🎭 The Fake Imposter")
@@ -231,8 +210,6 @@ async function showFalseImposterResults(ctx, game, voteLines, clueFields, winner
 
     GameManager.delete(game.channelId);
 }
-
-// ─── Shared helpers ───────────────────────────────────────────────────────────
 async function finalizeGame(ctx, game, impostersCaught, tie) {
     for (const playerId of game.players) {
         const isImposter = game.imposterIds.includes(playerId);

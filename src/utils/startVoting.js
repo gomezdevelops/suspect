@@ -9,13 +9,10 @@ const VOTING_SECONDS = 60;
 
 module.exports = async function startVoting(ctx, game) {
 
-    // Clear discussion timer if still running
     if (game.discussTimer) { clearTimeout(game.discussTimer); game.discussTimer = null; }
 
     game.state = "VOTING";
     game.votes = {};
-
-    // Build player buttons — max 5 per row, max 5 rows = 25 players
     const rows = [];
     let currentRow = new ActionRowBuilder();
     let count = 0;
@@ -48,28 +45,23 @@ module.exports = async function startVoting(ctx, game) {
 
     game.votingMessageId = message.id;
 
-    // ── Voting timers ────────────────────────────────────────────────────────
     const showResults = require("./showResults");
 
-    // 30s warning
     const warn30 = setTimeout(async () => {
         if (game.state !== "VOTING") return;
         await ctx.channel.send({ embeds: [votingWarning(30)] }).catch(() => {});
     }, 30 * 1000);
 
-    // 10s warning
     const warn10 = setTimeout(async () => {
         if (game.state !== "VOTING") return;
         await ctx.channel.send({ embeds: [votingWarning(10)] }).catch(() => {});
     }, 50 * 1000);
 
-    // Expire — fill abstentions then show results
     game.votingTimer = setTimeout(async () => {
         if (game.state !== "VOTING") return;
         clearTimeout(warn30);
         clearTimeout(warn10);
 
-        // Players who didn't vote abstain (null)
         for (const playerId of game.players) {
             if (!game.votes[playerId]) {
                 game.votes[playerId] = null;
@@ -86,7 +78,6 @@ module.exports = async function startVoting(ctx, game) {
         await showResults(ctx, game);
     }, VOTING_SECONDS * 1000);
 
-    // Store warn timers for cleanup
     game._votingWarn30 = warn30;
     game._votingWarn10 = warn10;
 };

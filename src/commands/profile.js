@@ -18,7 +18,6 @@ function getRank(stats) {
     return                                          { title: "Suspect",     icon: "🔍", color: 0x888888 };
 }
 
-// ── ASCII progress bar ────────────────────────────────────────────────────────
 function bar(value, max, length = 12) {
     const pct    = max > 0 ? Math.min(value / max, 1) : 0;
     const filled = Math.round(pct * length);
@@ -26,64 +25,45 @@ function bar(value, max, length = 12) {
     return `${"█".repeat(filled)}${"░".repeat(empty)}`;
 }
 
-// ── Stat row: label + bar + value ─────────────────────────────────────────────
 function statRow(label, value, max, suffix = "") {
     const padded = label.padEnd(14, " ");
     return `\`${padded}\` ${bar(value, max)} \`${value}${suffix}\``;
 }
 
-// ── Build the profile embed ───────────────────────────────────────────────────
 function buildProfileEmbed(targetUser, stats, avatarUrl) {
     const rank   = getRank(stats);
     const losses = stats.gamesPlayed - stats.gamesWon;
-
-    // Derived ratios
     const crewRate     = stats.crewWins > 0 && stats.gamesPlayed > 0
         ? Math.round((stats.crewWins     / stats.gamesPlayed) * 100) : 0;
     const imposterRate = stats.imposterWins > 0 && stats.gamesPlayed > 0
         ? Math.round((stats.imposterWins / stats.gamesPlayed) * 100) : 0;
     const detectRate   = stats.correctVotes > 0 && stats.gamesPlayed > 0
         ? Math.round((stats.correctVotes / stats.gamesPlayed) * 100) : 0;
-
-    // Win rate visual bar (out of 100)
     const winBarFilled = Math.round((stats.winRate / 100) * 20);
     const winBarEmpty  = 20 - winBarFilled;
     const winBar       = `${"▰".repeat(winBarFilled)}${"▱".repeat(winBarEmpty)}`;
-
-    // Header block
     const headerBlock =
         `╔═══════════════════════════╗\n` +
         `  ${rank.icon}  ${rank.title.toUpperCase()}\n` +
         `  ${targetUser.username}\n` +
         `╚═══════════════════════════╝`;
-
-    // Win rate display
     const winRateBlock =
         `**WIN RATE**\n` +
         `${winBar}\n` +
         `\`${stats.winRate}%\`  ·  **${stats.gamesWon}W** / **${losses}L**`;
-
-    // Core stats block (monospaced table)
     const coreStats =
         statRow("Games Played",  stats.gamesPlayed,  100)    + "\n" +
         statRow("Games Won",     stats.gamesWon,      stats.gamesPlayed > 0 ? stats.gamesPlayed : 1) + "\n" +
         statRow("Crew Wins",     stats.crewWins,      stats.gamesPlayed > 0 ? stats.gamesPlayed : 1) + "\n" +
         statRow("Imp. Wins",     stats.imposterWins,  stats.gamesPlayed > 0 ? stats.gamesPlayed : 1);
-
-    // Voting stats block
     const voteStats =
         statRow("Correct Votes", stats.correctVotes,  stats.gamesPlayed > 0 ? stats.gamesPlayed : 1) + "\n" +
         statRow("Times Voted Out",stats.timesVotedOut, stats.gamesPlayed > 0 ? stats.gamesPlayed : 1);
-
-    // Ratios footer line
     const ratioLine =
         `\`🕵️ ${detectRate}% detect\`` +
         `  \`🎭 ${imposterRate}% imp\`` +
         `  \`👥 ${crewRate}% crew\``;
-
-    // Next rank hint
     const nextRankHint = getNextRankHint(stats);
-
     const embed = new EmbedBuilder()
         .setColor(rank.color)
         .setAuthor({
@@ -129,8 +109,6 @@ function getNextRankHint(stats) {
 
     if (gamesPlayed === 0) return "Play your first game to get ranked.";
     if (gamesPlayed < 5)   return `${5 - gamesPlayed} more game(s) needed to leave Suspect rank.`;
-
-    // Check what rank they're NOT yet
     if (!(winRate >= 75 && imposterWins >= 10)) {
         const winsNeeded    = Math.max(0, Math.ceil(gamesPlayed * 0.75) - gamesWon);
         const impNeeded     = Math.max(0, 10 - imposterWins);
@@ -144,8 +122,6 @@ function getNextRankHint(stats) {
     }
     return "Maximum rank achieved. You are the Phantom. 🎭";
 }
-
-// ── Command ───────────────────────────────────────────────────────────────────
 module.exports = {
     name: "profile",
     data: new SlashCommandBuilder()
@@ -156,15 +132,12 @@ module.exports = {
              .setDescription("View another player's profile")
              .setRequired(false)
         ),
-
     async execute(ctx, args = []) {
-        // Resolve target user
         let targetUser;
 
         if (isSlash(ctx)) {
             targetUser = ctx.options.getUser("user") ?? ctx.user;
         } else {
-            // Prefix: =profile @mention or =profile
             const mention = ctx.mentions?.users?.first();
             targetUser = mention ?? ctx.author;
         }

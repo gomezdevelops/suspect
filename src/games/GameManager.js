@@ -4,13 +4,10 @@ module.exports = {
     create(channelId) {
         const game = {
             channelId,
-            state: "LOBBY",      // LOBBY | ROUND | DISCUSSION | VOTING | LAST_CHANCE
+            state: "LOBBY",
             mode: null,
             players: [],
-
-            // Single-imposter (normal) — kept for backward compat
             imposterId: null,
-            // Multi-imposter support (used everywhere internally)
             imposterIds: [],
 
             commonWord:   null,
@@ -20,22 +17,16 @@ module.exports = {
             order:       [],
             currentTurn: 0,
             clues:       {},
-
-            // Duplicate clue guard — lowercased set across entire game
             usedClues: new Set(),
 
             votes:          {},
-            skipVotes:      new Set(),   // =skip votes during DISCUSSION
+            skipVotes:      new Set(),
             votingMessageId: null,
-
-            // Active timer handles — cleared on early completion
             turnTimer:   null,
             votingTimer: null,
             discussTimer:null,
-
-            // Last-chance state
             lastChanceTimer:    null,
-            impostersCaught:    false,   // set true when imposters lose vote phase
+            impostersCaught:    false,
         };
 
         games.set(channelId, game);
