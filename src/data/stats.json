@@ -1,0 +1,110 @@
+{
+  "534898084208181275": {
+    "gamesPlayed": 19,
+    "gamesWon": 6,
+    "crewWins": 5,
+    "imposterWins": 1,
+    "correctVotes": 13,
+    "timesVotedOut": 3,
+    "winRate": 32
+  },
+  "867626936564842520": {
+    "gamesPlayed": 19,
+    "gamesWon": 6,
+    "crewWins": 5,
+    "imposterWins": 1,
+    "correctVotes": 10,
+    "timesVotedOut": 3,
+    "winRate": 32
+  },
+  "501361276815933441": {
+    "gamesPlayed": 19,
+    "gamesWon": 9,
+    "crewWins": 7,
+    "imposterWins": 2,
+    "correctVotes": 13,
+    "timesVotedOut": 3,
+    "winRate": 47
+  },
+  "611484298419240960": {
+    "gamesPlayed": 6,
+    "gamesWon": 2,
+    "crewWins": 1,
+    "imposterWins": 1,
+    "correctVotes": 1,
+    "timesVotedOut": 3,
+    "winRate": 33
+  },
+  "293279785491365889": {
+    "gamesPlayed": 17,
+    "gamesWon": 6,
+    "crewWins": 3,
+    "imposterWins": 3,
+    "correctVotes": 10,
+    "timesVotedOut": 3,
+    "winRate": 35
+  },
+  "453035829540159489": {
+    "gamesPlayed": 19,
+    "gamesWon": 10,
+    "crewWins": 6,
+    "imposterWins": 4,
+    "correctVotes": 11,
+    "timesVotedOut": 5,
+    "winRate": 53
+  },
+  "746227806278647928": {
+    "gamesPlayed": 10,
+    "gamesWon": 7,
+    "crewWins": 6,
+    "imposterWins": 1,
+    "correctVotes": 9,
+    "timesVotedOut": 2,
+    "winRate": 70
+  },
+  "746323569478467625": {
+    "gamesPlayed": 11,
+    "gamesWon": 6,
+    "crewWins": 5,
+    "imposterWins": 1,
+    "correctVotes": 11,
+    "timesVotedOut": 1,
+    "winRate": 55
+  },
+  "1248201029741445253": {
+    "gamesPlayed": 4,
+    "gamesWon": 1,
+    "crewWins": 1,
+    "imposterWins": 0,
+    "correctVotes": 1,
+    "timesVotedOut": 2,
+    "winRate": 25
+  },
+  "1309742757949997118": {
+    "gamesPlayed": 6,
+    "gamesWon": 4,
+    "crewWins": 3,
+    "imposterWins": 1,
+    "correctVotes": 3,
+    "timesVotedOut": 1,
+    "winRate": 67
+  },
+  "1167652212487491664": {
+    "gamesPlayed": 10,
+    "gamesWon": 5,
+    "crewWins": 4,
+    "imposterWins": 1,
+    "correctVotes": 7,
+    "timesVotedOut": 1,
+    "winRate": 50
+  },
+  "1202885291950743568": {
+    "gamesPlayed": 10,
+    "gamesWon": 5,
+    "crewWins": 4,
+    "imposterWins": 1,
+    "correctVotes": 5,
+    "timesVotedOut": 4,
+    "winRate": 50
+  }
+}

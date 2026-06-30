@@ -2,7 +2,8 @@ const GameManager  = require("../games/GameManager");
 const StatsManager = require("./StatsManager");
 const { EmbedBuilder } = require("discord.js");
 const { COLOR, COLOR_GREEN } = require("./embeds");
-const { finalizeGame, revealWords } = require("./showResults");
+const { finalizeGame, revealWords, getPlayerClues } = require("./showResults");
+const { sendConfessionCard } = require("./confessionCard");
 
 const LAST_CHANCE_SECONDS = 30;
 
@@ -20,6 +21,7 @@ function startTimer(ctx, game) {
             ]
         }).catch(() => {});
 
+        // Reveal words now that last chance is over
         await revealWords(ctx, game).catch(() => {});
 
         await endLastChance(ctx, game, false);
@@ -55,6 +57,7 @@ async function handleGuess(ctx, game, guesser, guessedWord) {
             ]
         });
 
+        // Reveal words after correct guess
         await revealWords(ctx, game).catch(() => {});
 
         await endLastChance(ctx, game, true);
@@ -83,6 +86,16 @@ async function endLastChance(ctx, game, imposterWon) {
         }
 
         StatsManager.update(playerId, delta);
+    }
+
+    // Confession cards — sent to every real imposter regardless of outcome
+    for (const imposterId of game.imposterIds) {
+        sendConfessionCard(ctx.client, imposterId, {
+            word: game.imposterWord,
+            wasRealImposter: true,
+            outcome: imposterWon ? "stole" : "caught",
+            clues: getPlayerClues(game, imposterId)
+        });
     }
 
     GameManager.delete(game.channelId);

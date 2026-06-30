@@ -30,6 +30,7 @@ const client = new Client({
 
 client.commands = new Collection();
 
+// ─── Load commands ────────────────────────────────────────────────────────────
 const commandsPath = path.join(__dirname, "commands");
 for (const file of fs.readdirSync(commandsPath).filter(f => f.endsWith(".js"))) {
     const cmd = require(path.join(commandsPath, file));
@@ -39,9 +40,11 @@ for (const file of fs.readdirSync(commandsPath).filter(f => f.endsWith(".js"))) 
     }
 }
 
+// ─── Ready — cache invites + register slash commands ─────────────────────────
 client.once("ready", async () => {
     console.log(`✅ Logged in as ${client.user.tag}`);
 
+    // Cache existing invites for the support server
     const supportGuildId = process.env.SUPPORT_SERVER_ID;
     if (supportGuildId) {
         const supportGuild = client.guilds.cache.get(supportGuildId);
@@ -51,6 +54,7 @@ client.once("ready", async () => {
         }
     }
 
+    // Register slash commands
     const slashCommands = [...client.commands.values()]
         .filter(c => c.data)
         .map(c => c.data.toJSON());
@@ -66,27 +70,32 @@ client.once("ready", async () => {
     }
 });
 
+// ─── Invite tracking — cache new invites when created ────────────────────────
 client.on("inviteCreate", async invite => {
     if (invite.guild.id !== process.env.SUPPORT_SERVER_ID) return;
     await InviteManager.cacheGuildInvites(invite.guild);
 });
 
+// ─── Invite tracking — detect which invite was used on member join ────────────
 client.on("guildMemberAdd", async member => {
     if (member.guild.id !== process.env.SUPPORT_SERVER_ID) return;
     await InviteManager.handleMemberJoin(member);
 });
 
+// ─── messageCreate — prefix commands + plain-text clue capture ───────────────
 client.on("messageCreate", async message => {
     if (message.author.bot) return;
 
+    // ── Prefix commands ───────────────────────────────────────────────────────
     if (message.content.startsWith(PREFIX)) {
         const args    = message.content.slice(PREFIX.length).trim().split(/\s+/);
         const cmdName = args.shift().toLowerCase();
 
+        // Handle hyphenated command names with space variant (=invite leaderboard)
         let command = client.commands.get(cmdName);
         if (!command && args.length > 0) {
             command = client.commands.get(`${cmdName}-${args[0]}`);
-            if (command) args.shift();
+            if (command) args.shift(); // consume the second word
         }
 
         if (!command) return;
@@ -100,6 +109,7 @@ client.on("messageCreate", async message => {
         return;
     }
 
+    // ── Plain-text clue capture (ROUND state) ─────────────────────────────────
     const game = GameManager.get(message.channelId);
     if (!game || game.state !== "ROUND") return;
 
@@ -107,9 +117,16 @@ client.on("messageCreate", async message => {
     if (message.author.id !== currentPlayer) return;
 
     const clue = message.content.trim();
+    const MAX_CLUE_LENGTH = 20;
 
     if (clue.length < 2) {
         const r = await message.reply("❌ Clue must be at least 2 characters.");
+        setTimeout(() => r.delete().catch(() => {}), 5000);
+        return;
+    }
+
+    if (clue.length > MAX_CLUE_LENGTH) {
+        const r = await message.reply(`❌ Clue must be ${MAX_CLUE_LENGTH} characters or fewer.`);
         setTimeout(() => r.delete().catch(() => {}), 5000);
         return;
     }
@@ -119,6 +136,8 @@ client.on("messageCreate", async message => {
         setTimeout(() => r.delete().catch(() => {}), 5000);
         return;
     }
+
+    // ── Duplicate clue detection ──────────────────────────────────────────────
     const clueLower = clue.toLowerCase();
     if (game.usedClues.has(clueLower)) {
         await message.channel.send({ embeds: [duplicateClue(clue)] });
@@ -137,6 +156,8 @@ client.on("messageCreate", async message => {
     game.currentTurn++;
     client.emit("nextTurn", message, game);
 });
+
+// ─── interactionCreate — slash commands + vote buttons ───────────────────────
 client.on("interactionCreate", async interaction => {
     try {
         if (interaction.isChatInputCommand()) {
@@ -161,6 +182,8 @@ client.on("interactionCreate", async interaction => {
         } catch {}
     }
 });
+
+// ─── nextTurn event ───────────────────────────────────────────────────────────
 client.on("nextTurn", async (ctx, game) => {
     try { await nextTurn(ctx, game); }
     catch (err) { console.error("nextTurn error:", err); }
