@@ -1,10 +1,13 @@
 const { SlashCommandBuilder, EmbedBuilder } = require("discord.js");
-const GameManager = require("../games/GameManager");
-const startGame   = require("../utils/startGame");
-const sendWords   = require("../utils/sendWords");
-const startRound  = require("../utils/startRound");
+const GameManager   = require("../games/GameManager");
+const startGame     = require("../utils/startGame");
+const sendWords     = require("../utils/sendWords");
+const startRound    = require("../utils/startRound");
+const VoteTracker   = require("../utils/VoteTracker");
 const { gameStarted, COLOR } = require("../utils/embeds");
 const { user, channelId, reply, getArg, isSlash } = require("../utils/ctx");
+
+const TOPGG_URL = "https://top.gg/bot/1514691427370799154/vote";
 
 module.exports = {
     name: "start",
@@ -13,24 +16,60 @@ module.exports = {
         .setDescription("Start the game")
         .addStringOption(o =>
             o.setName("mode").setDescription("Game mode").setRequired(true)
-             .addChoices({ name: "Normal", value: "normal" }, { name: "Hidden", value: "hidden" })
+             .addChoices(
+                 { name: "Normal", value: "normal" },
+                 { name: "Hidden", value: "hidden" },
+                 { name: "Decoy",  value: "decoy"  }
+             )
         ),
 
     async execute(ctx, args = []) {
         const mode = getArg(ctx, "mode", 0, args)?.toLowerCase();
         const cid  = channelId(ctx);
 
-        if (mode !== "normal" && mode !== "hidden") {
-            return reply(ctx, { content: "❌ Specify a mode: `=start normal` or `=start hidden`", ephemeral: true });
+        if (!["normal", "hidden", "decoy"].includes(mode)) {
+            return reply(ctx, { content: "❌ Specify a mode: `=start normal`, `=start hidden`, or `=start decoy`", ephemeral: true });
         }
 
         const game = GameManager.get(cid);
         if (!game)                  return reply(ctx, { content: "❌ No lobby found. Use `=enter` first.", ephemeral: true });
         if (game.state !== "LOBBY") return reply(ctx, { content: "❌ A game is already running.", ephemeral: true });
-        if (game.players.length < 4) return reply(ctx, { content: "❌ At least 4 players are required.", ephemeral: true });
+
+        const minPlayers = mode === "decoy" ? 5 : 4;
+        if (game.players.length < minPlayers) {
+            return reply(ctx, {
+                content: `❌ At least ${minPlayers} players are required for ${mode === "decoy" ? "Decoy" : "this"} mode.`,
+                ephemeral: true
+            });
+        }
+
+        // ── Decoy mode: require all players to have voted recently ─────────────
+        if (mode === "decoy") {
+            const nonVoters = game.players.filter(id => !VoteTracker.hasVotedRecently(id));
+
+            if (nonVoters.length > 0) {
+                const mentions = nonVoters.map(id => `<@${id}>`).join(", ");
+
+                const embed = new EmbedBuilder()
+                    .setColor(0xff0000)
+                    .setTitle("🗳️ Vote Required for Decoy Mode")
+                    .setDescription(
+                        `**Decoy mode is a premium game mode** — all players must have voted for Suspect on top.gg within the last 12 hours to play it.\n\n` +
+                        `The following player${nonVoters.length > 1 ? "s have" : " has"} not voted recently:\n\n` +
+                        `${mentions}\n\n` +
+                        `**[Vote here to unlock Decoy mode](${TOPGG_URL})**\n\n` +
+                        `Voting also earns you **Shards** to spend in \`/shop\`. Once everyone has voted, try \`=start decoy\` again.`
+                    )
+                    .setFooter({ text: "Votes reset every 12 hours on top.gg" });
+
+                return reply(ctx, { embeds: [embed] });
+            }
+        }
 
         game.mode = mode;
         startGame(game);
+
+        // Defer slash, or send holding message for prefix
         let holdingMsg = null;
         if (isSlash(ctx)) {
             await ctx.deferReply();

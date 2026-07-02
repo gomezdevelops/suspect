@@ -126,6 +126,25 @@ module.exports = async function showResults(ctx, game) {
         inline: true
     });
 
+    // Decoy mode — reveal the decoy too. They were never the real imposter,
+    // they just believed they were the whole time.
+    if (game.mode === "decoy" && game.decoyId) {
+        const decoyUser = await ctx.client.users.fetch(game.decoyId);
+        embed.addFields({
+            name: "🃏 Decoy",
+            value: `${decoyUser.username}\n*Secretly told they were the Imposter. They weren't.*`,
+            inline: true
+        });
+
+        // Confession card — sent immediately, independent of vote outcome or last chance
+        sendConfessionCard(ctx.client, game.decoyId, {
+            word: game.commonWord,
+            wasRealImposter: false,
+            outcome: "none-existed",
+            clues: getPlayerClues(game, game.decoyId)
+        });
+    }
+
     if (clueFields.length) {
         embed.addFields({ name: "🗒️ Clue History", value: "\u200b" }, ...clueFields);
     }

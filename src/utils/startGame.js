@@ -23,17 +23,22 @@ module.exports = function startGame(game) {
     const history  = loadHistory();
     const usedSet  = new Set(history.flatMap(h => [h.common, h.imposter]));
     const freshPool = words.filter(w => !usedSet.has(w));
+    // Fall back to full pool if too many words have been used
     const pool = freshPool.length >= 2 ? freshPool : words;
 
+    // Pick crew word
     game.commonWord = pickWord(pool);
 
+    // Pick imposter word — different from crew word
     const impPool = pool.filter(w => w !== game.commonWord);
     game.imposterWord = pickWord(impPool.length ? impPool : words.filter(w => w !== game.commonWord));
 
+    // Persist this game's words to history
     history.push({ common: game.commonWord, imposter: game.imposterWord });
     if (history.length > HISTORY_SIZE) history.splice(0, history.length - HISTORY_SIZE);
     saveHistory(history);
 
+    // ── Imposter selection ──────────────────────────────────────────────────
     const count = game.players.length;
     let imposterCount = 1;
     if (game.mode === "hidden" && count >= 8) imposterCount = 2;
@@ -42,6 +47,16 @@ module.exports = function startGame(game) {
     game.imposterIds = shuffled.slice(0, imposterCount);
     game.imposterId  = game.imposterIds[0]; // backward compat
 
+    // ── Decoy selection (Decoy mode only) ─────────────────────────────────────
+    // A second player is told they're the imposter, but secretly gets the crew word.
+    // Min 5 players enforced in start.js — guarantees at least 3 real crew remain.
+    game.decoyId = null;
+    if (game.mode === "decoy") {
+        const remaining = shuffled.slice(imposterCount);
+        game.decoyId = remaining[0];
+    }
+
+    // ── Round order ──────────────────────────────────────────────────────────
     game.order       = [...game.players].sort(() => Math.random() - 0.5);
     game.round       = 1;
     game.currentTurn = 0;

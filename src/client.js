@@ -2,6 +2,7 @@ require("dotenv").config();
 
 const fs   = require("fs");
 const path = require("path");
+const http = require("http");
 const {
     Client, Collection,
     GatewayIntentBits,
@@ -13,10 +14,16 @@ const nextTurn      = require("./utils/nextTurn");
 const handleVote    = require("./utils/handleVote");
 const lastChance    = require("./utils/lastChance");
 const InviteManager = require("./utils/InviteManager");
+const VoteTracker   = require("./utils/VoteTracker");
+const ShardManager  = require("./utils/ShardManager");
 const { clueSent, duplicateClue } = require("./utils/embeds");
 const { scheduleTurnTimer }        = require("./utils/startRound");
 
 const PREFIX = "=";
+
+// ── top.gg webhook secret (set in .env as TOPGG_AUTH)
+const TOPGG_AUTH    = process.env.TOPGG_AUTH ?? "";
+const WEBHOOK_PORT  = parseInt(process.env.WEBHOOK_PORT ?? "3000", 10);
 
 const client = new Client({
     intents: [
@@ -30,7 +37,7 @@ const client = new Client({
 
 client.commands = new Collection();
 
-// ─── Load commands ────────────────────────────────────────────────────────────
+// ─── Load commands ─────────────────────────────────────────────────────────────
 const commandsPath = path.join(__dirname, "commands");
 for (const file of fs.readdirSync(commandsPath).filter(f => f.endsWith(".js"))) {
     const cmd = require(path.join(commandsPath, file));
@@ -40,11 +47,10 @@ for (const file of fs.readdirSync(commandsPath).filter(f => f.endsWith(".js"))) 
     }
 }
 
-// ─── Ready — cache invites + register slash commands ─────────────────────────
-client.once("ready", async () => {
+// ─── Ready ────────────────────────────────────────────────────────────────────
+client.once("clientReady", async () => {
     console.log(`✅ Logged in as ${client.user.tag}`);
 
-    // Cache existing invites for the support server
     const supportGuildId = process.env.SUPPORT_SERVER_ID;
     if (supportGuildId) {
         const supportGuild = client.guilds.cache.get(supportGuildId);
@@ -54,48 +60,101 @@ client.once("ready", async () => {
         }
     }
 
-    // Register slash commands
     const slashCommands = [...client.commands.values()]
         .filter(c => c.data)
         .map(c => c.data.toJSON());
 
-    if (!slashCommands.length) return;
-
-    try {
-        const rest = new REST({ version: "10" }).setToken(process.env.TOKEN);
-        await rest.put(Routes.applicationCommands(client.user.id), { body: slashCommands });
-        console.log(`Registered ${slashCommands.length} slash command(s)`);
-    } catch (err) {
-        console.error("Slash registration error:", err);
+    if (slashCommands.length) {
+        try {
+            const rest = new REST({ version: "10" }).setToken(process.env.TOKEN);
+            await rest.put(Routes.applicationCommands(client.user.id), { body: slashCommands });
+            console.log(`Registered ${slashCommands.length} slash command(s)`);
+        } catch (err) {
+            console.error("Slash registration error:", err);
+        }
     }
 });
 
-// ─── Invite tracking — cache new invites when created ────────────────────────
+// ─── top.gg Webhook server ────────────────────────────────────────────────────
+// Set up in top.gg bot page: Webhooks → URL = http://your-server-ip:3000/topgg
+// Set Authorization header to same value as TOPGG_AUTH in your .env
+http.createServer(async (req, res) => {
+    if (req.method !== "POST" || req.url !== "/topgg") {
+        res.writeHead(404); res.end(); return;
+    }
+
+    // Validate auth header
+    const auth = req.headers["authorization"] ?? "";
+    if (TOPGG_AUTH && auth !== TOPGG_AUTH) {
+        res.writeHead(401); res.end(); return;
+    }
+
+    let body = "";
+    req.on("data", chunk => { body += chunk; });
+    req.on("end", async () => {
+        try {
+            const data = JSON.parse(body);
+            const userId = data.user;
+            if (!userId) { res.writeHead(400); res.end(); return; }
+
+            // Record vote, get rewards
+            const { shardsEarned, newStreak, newBadges } = VoteTracker.recordVote(userId);
+            const newBalance = ShardManager.addShards(userId, shardsEarned);
+
+            // DM the voter
+            try {
+                const discordUser = await client.users.fetch(userId);
+                const badgeLine   = newBadges.length
+                    ? `\n\n🏅 **New badge${newBadges.length > 1 ? "s" : ""} unlocked:** ${newBadges.join("  ")}`
+                    : "";
+
+                await discordUser.send(
+                    `🗳️ **Thanks for voting for Suspect!**\n\n` +
+                    `You earned **${shardsEarned} Shards** 💎\n` +
+                    `🔥 Vote streak: **${newStreak}** day${newStreak !== 1 ? "s" : ""}` +
+                    (newStreak % 7 === 0 && newStreak > 0
+                        ? ` — streak milestone! Your multiplier increased!` : "") +
+                    `\nTotal balance: **${newBalance} Shards**` +
+                    badgeLine +
+                    `\n\nSpend your Shards in \`/shop\` or check your balance with \`/balance\`.`
+                );
+            } catch {
+                // DMs closed — vote still recorded
+            }
+
+            res.writeHead(200); res.end("OK");
+        } catch (err) {
+            console.error("Webhook error:", err);
+            res.writeHead(500); res.end();
+        }
+    });
+}).listen(WEBHOOK_PORT, () => {
+    console.log(`top.gg webhook server listening on port ${WEBHOOK_PORT}`);
+});
+
+// ─── Invite tracking ──────────────────────────────────────────────────────────
 client.on("inviteCreate", async invite => {
     if (invite.guild.id !== process.env.SUPPORT_SERVER_ID) return;
     await InviteManager.cacheGuildInvites(invite.guild);
 });
 
-// ─── Invite tracking — detect which invite was used on member join ────────────
 client.on("guildMemberAdd", async member => {
     if (member.guild.id !== process.env.SUPPORT_SERVER_ID) return;
     await InviteManager.handleMemberJoin(member);
 });
 
-// ─── messageCreate — prefix commands + plain-text clue capture ───────────────
+// ─── messageCreate — prefix commands + clue capture ──────────────────────────
 client.on("messageCreate", async message => {
     if (message.author.bot) return;
 
-    // ── Prefix commands ───────────────────────────────────────────────────────
     if (message.content.startsWith(PREFIX)) {
         const args    = message.content.slice(PREFIX.length).trim().split(/\s+/);
         const cmdName = args.shift().toLowerCase();
 
-        // Handle hyphenated command names with space variant (=invite leaderboard)
         let command = client.commands.get(cmdName);
         if (!command && args.length > 0) {
             command = client.commands.get(`${cmdName}-${args[0]}`);
-            if (command) args.shift(); // consume the second word
+            if (command) args.shift();
         }
 
         if (!command) return;
@@ -109,14 +168,14 @@ client.on("messageCreate", async message => {
         return;
     }
 
-    // ── Plain-text clue capture (ROUND state) ─────────────────────────────────
+    // ── Plain-text clue capture ───────────────────────────────────────────────
     const game = GameManager.get(message.channelId);
     if (!game || game.state !== "ROUND") return;
 
     const currentPlayer = game.order[game.currentTurn];
     if (message.author.id !== currentPlayer) return;
 
-    const clue = message.content.trim();
+    const clue            = message.content.trim();
     const MAX_CLUE_LENGTH = 20;
 
     if (clue.length < 2) {
@@ -137,7 +196,6 @@ client.on("messageCreate", async message => {
         return;
     }
 
-    // ── Duplicate clue detection ──────────────────────────────────────────────
     const clueLower = clue.toLowerCase();
     if (game.usedClues.has(clueLower)) {
         await message.channel.send({ embeds: [duplicateClue(clue)] });
@@ -157,9 +215,10 @@ client.on("messageCreate", async message => {
     client.emit("nextTurn", message, game);
 });
 
-// ─── interactionCreate — slash commands + vote buttons ───────────────────────
+// ─── interactionCreate — slash commands + all buttons ────────────────────────
 client.on("interactionCreate", async interaction => {
     try {
+        // Slash commands
         if (interaction.isChatInputCommand()) {
             const command = client.commands.get(interaction.commandName);
             if (!command) return;
@@ -168,6 +227,18 @@ client.on("interactionCreate", async interaction => {
         }
 
         if (interaction.isButton()) {
+            // ── Shop pagination buttons ──────────────────────────────────────
+            if (interaction.customId.startsWith("shop_page_")) {
+                const page     = parseInt(interaction.customId.replace("shop_page_", ""), 10);
+                const uid      = interaction.user.id;
+                const balance  = ShardManager.getBalance(uid);
+                const { sendShopPage } = require("./commands/shop");
+                await interaction.deferUpdate();
+                await sendShopPage(interaction, uid, balance, page);
+                return;
+            }
+
+            // ── Vote buttons (game voting) ───────────────────────────────────
             const game = GameManager.get(interaction.channelId);
             if (!game || game.state !== "VOTING") return;
             await handleVote(interaction, game);

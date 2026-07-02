@@ -5,13 +5,14 @@ const COLOR_GREEN = 0x00c853;
 const COLOR_AMBER = 0xffa500;
 
 function gameStarted(playerCount, mode, imposterCount) {
+    const modeLabels = { normal: "Normal", hidden: "Hidden", decoy: "Decoy" };
     return new EmbedBuilder()
         .setColor(COLOR)
         .setTitle("🎮 Game Started")
         .addFields(
-            { name: "Players",   value: String(playerCount),                       inline: true },
-            { name: "Mode",      value: mode === "normal" ? "Normal" : "Hidden",   inline: true },
-            { name: "Imposters", value: String(imposterCount),                     inline: true }
+            { name: "Players",   value: String(playerCount),               inline: true },
+            { name: "Mode",      value: modeLabels[mode] ?? mode,          inline: true },
+            { name: "Imposters", value: String(imposterCount),             inline: true }
         )
         .setFooter({ text: "Check your DMs for your word!" });
 }
