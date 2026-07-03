@@ -1,7 +1,9 @@
-const fs   = require("fs");
-const path = require("path");
+const { collection } = require("../db/connect");
 
-const VOTES_FILE = path.join(__dirname, "../data/votes.json");
+// Collection: votes — docs shaped { _id: userId, lastVoteAt, totalVotes,
+// streak, lastStreakAt, earnedBadges }
+const col = () => collection("votes");
+
 const TOPGG_URL  = "https://top.gg/bot/1514691427370799154/vote";
 
 // Vote window: top.gg resets every 12 hours
@@ -23,16 +25,6 @@ const MILESTONES = [
     { votes: 100, badge: "🏆 Legend Voter" },
 ];
 
-function load() {
-    if (!fs.existsSync(VOTES_FILE)) return {};
-    try { return JSON.parse(fs.readFileSync(VOTES_FILE, "utf8")); }
-    catch { return {}; }
-}
-
-function save(data) {
-    fs.writeFileSync(VOTES_FILE, JSON.stringify(data, null, 2));
-}
-
 function getDefault() {
     return {
         lastVoteAt:  0,       // unix ms timestamp of last vote
@@ -43,14 +35,14 @@ function getDefault() {
     };
 }
 
-function get(userId) {
-    const all = load();
-    return { ...getDefault(), ...(all[userId] || {}) };
+async function get(userId) {
+    const doc = await col().findOne({ _id: userId });
+    return { ...getDefault(), ...(doc || {}) };
 }
 
 /** Returns true if the user voted within the last 12 hours */
-function hasVotedRecently(userId) {
-    const data = get(userId);
+async function hasVotedRecently(userId) {
+    const data = await get(userId);
     return (Date.now() - data.lastVoteAt) < VOTE_WINDOW_MS;
 }
 
@@ -58,9 +50,8 @@ function hasVotedRecently(userId) {
  * Called by the top.gg webhook when a user votes.
  * Returns { shardsEarned, newStreak, newBadges }
  */
-function recordVote(userId) {
-    const all  = load();
-    const data = { ...getDefault(), ...(all[userId] || {}) };
+async function recordVote(userId) {
+    const data = await get(userId);
     const now  = Date.now();
 
     // Streak logic: did they vote within the last STREAK_GRACE_MS?
@@ -84,25 +75,34 @@ function recordVote(userId) {
         }
     }
 
-    all[userId] = data;
-    save(all);
+    await col().updateOne(
+        { _id: userId },
+        { $set: {
+            lastVoteAt:   data.lastVoteAt,
+            totalVotes:   data.totalVotes,
+            streak:       data.streak,
+            lastStreakAt: data.lastStreakAt,
+            earnedBadges: data.earnedBadges
+        } },
+        { upsert: true }
+    );
 
     return { shardsEarned, newStreak: data.streak, newBadges };
 }
 
 /** Returns all milestone badges earned by a user */
-function getBadges(userId) {
-    return get(userId).earnedBadges;
+async function getBadges(userId) {
+    return (await get(userId)).earnedBadges;
 }
 
-/** Next milestone info for a user */
+/** Next milestone info for a user (pure — no DB) */
 function getNextMilestone(totalVotes) {
     const next = MILESTONES.find(m => m.votes > totalVotes);
     return next ? { votes: next.votes, remaining: next.votes - totalVotes } : null;
 }
 
 /** Returns all data for a user (for profile display) */
-function getFullData(userId) {
+async function getFullData(userId) {
     return get(userId);
 }
 

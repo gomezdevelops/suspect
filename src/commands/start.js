@@ -45,7 +45,10 @@ module.exports = {
 
         // ── Decoy mode: require all players to have voted recently ─────────────
         if (mode === "decoy") {
-            const nonVoters = game.players.filter(id => !VoteTracker.hasVotedRecently(id));
+            const voteChecks = await Promise.all(
+                game.players.map(async id => ({ id, voted: await VoteTracker.hasVotedRecently(id) }))
+            );
+            const nonVoters = voteChecks.filter(v => !v.voted).map(v => v.id);
 
             if (nonVoters.length > 0) {
                 const mentions = nonVoters.map(id => `<@${id}>`).join(", ");
@@ -67,7 +70,7 @@ module.exports = {
         }
 
         game.mode = mode;
-        startGame(game);
+        await startGame(game);
 
         // Defer slash, or send holding message for prefix
         let holdingMsg = null;

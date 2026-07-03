@@ -11,8 +11,8 @@ module.exports = {
 
     async execute(ctx) {
         const uid    = user(ctx).id;
-        const owned  = getOwnedTitles(uid);
-        const active = getActiveTitle(uid);
+        const owned  = await getOwnedTitles(uid);
+        const active = await getActiveTitle(uid);
 
         if (!owned.length) {
             return reply(ctx, {

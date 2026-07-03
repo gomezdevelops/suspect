@@ -20,7 +20,7 @@ module.exports = {
 
     async execute(ctx, args = []) {
         const uid     = user(ctx).id;
-        const balance = ShardManager.getBalance(uid);
+        const balance = await ShardManager.getBalance(uid);
 
         await sendShopPage(ctx, uid, balance, 0);
     }

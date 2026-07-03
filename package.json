@@ -4,13 +4,15 @@
   "description": "Suspect — Social deduction Discord bot",
   "main": "index.js",
   "scripts": {
-    "start": "node index.js"
+    "start": "node index.js",
+    "migrate": "node scripts/migrate.js"
   },
   "license": "ISC",
   "type": "commonjs",
   "dependencies": {
     "@napi-rs/canvas": "^0.1.100",
     "discord.js": "^14.26.4",
-    "dotenv": "^17.4.2"
+    "dotenv": "^17.4.2",
+    "mongodb": "^7.4.0"
   }
 }

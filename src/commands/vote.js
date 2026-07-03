@@ -12,9 +12,9 @@ module.exports = {
 
     async execute(ctx) {
         const uid      = user(ctx).id;
-        const voteData = VoteTracker.getFullData(uid);
-        const balance  = ShardManager.getBalance(uid);
-        const canVote  = !VoteTracker.hasVotedRecently(uid);
+        const voteData = await VoteTracker.getFullData(uid);
+        const balance  = await ShardManager.getBalance(uid);
+        const canVote  = !(await VoteTracker.hasVotedRecently(uid));
         const nextMile = VoteTracker.getNextMilestone(voteData.totalVotes);
 
         const multiplier   = Math.floor(voteData.streak / 7) + 1;

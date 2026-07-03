@@ -135,10 +135,10 @@ module.exports = {
             targetUser = mention ?? ctx.author;
         }
 
-        const stats       = StatsManager.get(targetUser.id);
-        const shards      = ShardManager.getBalance(targetUser.id);
-        const voteData    = VoteTracker.getFullData(targetUser.id);
-        const activeTitle = getActiveTitle(targetUser.id);
+        const stats       = await StatsManager.get(targetUser.id);
+        const shards      = await ShardManager.getBalance(targetUser.id);
+        const voteData    = await VoteTracker.getFullData(targetUser.id);
+        const activeTitle = await getActiveTitle(targetUser.id);
         const avatarUrl   = targetUser.displayAvatarURL({ size: 256 });
         const embed       = buildProfileEmbed(targetUser, stats, shards, voteData, activeTitle, avatarUrl);
 

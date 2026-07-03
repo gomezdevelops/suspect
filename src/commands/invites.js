@@ -49,7 +49,7 @@ module.exports = {
             targetUser = ctx.mentions?.users?.first() ?? ctx.author;
         }
 
-        const count   = InviteManager.getInviteCount(targetUser.id);
+        const count   = await InviteManager.getInviteCount(targetUser.id);
         const eligible = count >= 10;
 
         const embed = new EmbedBuilder()

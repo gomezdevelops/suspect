@@ -12,9 +12,9 @@ module.exports = {
 
     async execute(ctx) {
         const uid      = user(ctx).id;
-        const balance  = ShardManager.getBalance(uid);
-        const voteData = VoteTracker.getFullData(uid);
-        const canVote  = !VoteTracker.hasVotedRecently(uid);
+        const balance  = await ShardManager.getBalance(uid);
+        const voteData = await VoteTracker.getFullData(uid);
+        const canVote  = !(await VoteTracker.hasVotedRecently(uid));
 
         const embed = new EmbedBuilder()
             .setColor(COLOR)

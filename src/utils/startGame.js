@@ -1,26 +1,31 @@
-const fs   = require("fs");
-const path = require("path");
 const words = require("./words");
+const { collection } = require("../db/connect");
 
-const HISTORY_FILE = path.join(__dirname, "../data/usedWords.json");
+// Word history lives in the `meta` collection as a single doc:
+// { _id: "usedWords", history: [ { common, imposter }, ... ] }
+const meta = () => collection("meta");
+const HISTORY_ID   = "usedWords";
 const HISTORY_SIZE = 20;
 
-function loadHistory() {
-    if (!fs.existsSync(HISTORY_FILE)) return [];
-    try { return JSON.parse(fs.readFileSync(HISTORY_FILE, "utf8")); }
-    catch { return []; }
+async function loadHistory() {
+    const doc = await meta().findOne({ _id: HISTORY_ID });
+    return doc?.history ?? [];
 }
 
-function saveHistory(history) {
-    fs.writeFileSync(HISTORY_FILE, JSON.stringify(history, null, 2));
+async function saveHistory(history) {
+    await meta().updateOne(
+        { _id: HISTORY_ID },
+        { $set: { history } },
+        { upsert: true }
+    );
 }
 
 function pickWord(pool) {
     return pool[Math.floor(Math.random() * pool.length)];
 }
 
-module.exports = function startGame(game) {
-    const history  = loadHistory();
+module.exports = async function startGame(game) {
+    const history  = await loadHistory();
     const usedSet  = new Set(history.flatMap(h => [h.common, h.imposter]));
     const freshPool = words.filter(w => !usedSet.has(w));
     // Fall back to full pool if too many words have been used
@@ -36,7 +41,7 @@ module.exports = function startGame(game) {
     // Persist this game's words to history
     history.push({ common: game.commonWord, imposter: game.imposterWord });
     if (history.length > HISTORY_SIZE) history.splice(0, history.length - HISTORY_SIZE);
-    saveHistory(history);
+    await saveHistory(history);
 
     // ── Imposter selection ──────────────────────────────────────────────────
     const count = game.players.length;

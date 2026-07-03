@@ -1,38 +1,31 @@
-const fs   = require("fs");
-const path = require("path");
+const { collection } = require("../db/connect");
 
-const SHARDS_FILE = path.join(__dirname, "../data/shards.json");
+// Collection: shards — docs shaped { _id: userId, balance: Number }
+const col = () => collection("shards");
 
-function load() {
-    if (!fs.existsSync(SHARDS_FILE)) return {};
-    try { return JSON.parse(fs.readFileSync(SHARDS_FILE, "utf8")); }
-    catch { return {}; }
+async function getBalance(userId) {
+    const doc = await col().findOne({ _id: userId });
+    return doc?.balance ?? 0;
 }
 
-function save(data) {
-    fs.writeFileSync(SHARDS_FILE, JSON.stringify(data, null, 2));
+async function addShards(userId, amount) {
+    const doc = await col().findOneAndUpdate(
+        { _id: userId },
+        { $inc: { balance: amount } },
+        { upsert: true, returnDocument: "after" }
+    );
+    return doc?.balance ?? amount;
 }
 
-function getBalance(userId) {
-    const all = load();
-    return all[userId] ?? 0;
-}
-
-function addShards(userId, amount) {
-    const all = load();
-    all[userId] = (all[userId] ?? 0) + amount;
-    save(all);
-    return all[userId];
-}
-
-/** Returns false if insufficient balance, otherwise deducts and returns new balance */
-function spendShards(userId, amount) {
-    const all = load();
-    const bal = all[userId] ?? 0;
-    if (bal < amount) return false;
-    all[userId] = bal - amount;
-    save(all);
-    return all[userId];
+/** Atomically deducts if the balance is sufficient. Returns new balance, or false. */
+async function spendShards(userId, amount) {
+    const doc = await col().findOneAndUpdate(
+        { _id: userId, balance: { $gte: amount } },
+        { $inc: { balance: -amount } },
+        { returnDocument: "after" }
+    );
+    if (!doc) return false; // no doc matched → insufficient balance
+    return doc.balance;
 }
 
 module.exports = { getBalance, addShards, spendShards };

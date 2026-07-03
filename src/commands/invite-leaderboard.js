@@ -38,7 +38,7 @@ module.exports = {
             return reply(ctx, { embeds: [embed], components: [row] });
         }
 
-        const all = InviteManager.getAllInvites();
+        const all = await InviteManager.getAllInvites();
 
         if (Object.keys(all).length === 0) {
             return reply(ctx, { content: "❌ No invite data yet.", ephemeral: true });

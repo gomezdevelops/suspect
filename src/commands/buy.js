@@ -45,7 +45,7 @@ module.exports = {
                 });
             }
 
-            const balance = ShardManager.getBalance(uid);
+            const balance = await ShardManager.getBalance(uid);
             if (balance < CUSTOM_TITLE_COST) {
                 return reply(ctx, {
                     content: `❌ Not enough Shards. Custom titles cost **${CUSTOM_TITLE_COST} Shards** — you have **${balance}**.`,
@@ -53,10 +53,10 @@ module.exports = {
                 });
             }
 
-            ShardManager.spendShards(uid, CUSTOM_TITLE_COST);
-            grantCustomTitle(uid, label);
+            await ShardManager.spendShards(uid, CUSTOM_TITLE_COST);
+            await grantCustomTitle(uid, label);
 
-            const newBal = ShardManager.getBalance(uid);
+            const newBal = await ShardManager.getBalance(uid);
             const embed = new EmbedBuilder()
                 .setColor(COLOR)
                 .setTitle("✨ Custom Title Created!")
@@ -81,7 +81,7 @@ module.exports = {
         }
 
         // Already owned?
-        const owned = getOwnedTitles(uid);
+        const owned = await getOwnedTitles(uid);
         if (owned.some(t => t.id === titleId)) {
             return reply(ctx, {
                 content: `❌ You already own **${title.label}**. Use \`/settitle\` to equip it.`,
@@ -89,7 +89,7 @@ module.exports = {
             });
         }
 
-        const balance = ShardManager.getBalance(uid);
+        const balance = await ShardManager.getBalance(uid);
         if (balance < title.cost) {
             return reply(ctx, {
                 content: `❌ Not enough Shards. **${title.label}** costs **${title.cost} Shards** — you have **${balance}**.`,
@@ -97,10 +97,10 @@ module.exports = {
             });
         }
 
-        ShardManager.spendShards(uid, title.cost);
-        grantTitle(uid, titleId);
+        await ShardManager.spendShards(uid, title.cost);
+        await grantTitle(uid, titleId);
 
-        const newBal = ShardManager.getBalance(uid);
+        const newBal = await ShardManager.getBalance(uid);
         const embed = new EmbedBuilder()
             .setColor(COLOR)
             .setTitle("🎉 Title Purchased!")

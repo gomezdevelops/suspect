@@ -85,7 +85,7 @@ async function endLastChance(ctx, game, imposterWon) {
             if (!isImposter) { delta.gamesWon = 1; delta.crewWins = 1; }
         }
 
-        StatsManager.update(playerId, delta);
+        await StatsManager.update(playerId, delta);
     }
 
     // Confession cards — sent to every real imposter regardless of outcome

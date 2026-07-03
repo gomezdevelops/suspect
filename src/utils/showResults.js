@@ -88,11 +88,11 @@ module.exports = async function showResults(ctx, game) {
     // Stats — correct votes and times voted out
     for (const [voterId, votedId] of Object.entries(game.votes)) {
         if (votedId && game.imposterIds.includes(votedId)) {
-            StatsManager.update(voterId, { correctVotes: 1 });
+            await StatsManager.update(voterId, { correctVotes: 1 });
         }
     }
     for (const w of winners) {
-        if (!tie) StatsManager.update(w, { timesVotedOut: 1 });
+        if (!tie) await StatsManager.update(w, { timesVotedOut: 1 });
     }
 
     // ── Result embed — NO word reveal yet (happens after last chance) ─────────
@@ -282,10 +282,10 @@ async function showFalseImposterResults(ctx, game, voteLines, clueFields, winner
     });
 
     for (const playerId of game.players) {
-        StatsManager.update(playerId, { gamesPlayed: 1, gamesWon: 1, crewWins: 1 });
+        await StatsManager.update(playerId, { gamesPlayed: 1, gamesWon: 1, crewWins: 1 });
     }
     if (mostVotedId && mostVotedId === game.fakeImposterId && !tie) {
-        StatsManager.update(game.fakeImposterId, { timesVotedOut: 1 });
+        await StatsManager.update(game.fakeImposterId, { timesVotedOut: 1 });
     }
 
     GameManager.delete(game.channelId);
@@ -303,7 +303,7 @@ async function finalizeGame(ctx, game, impostersCaught, tie) {
         } else {
             if (isImposter) { delta.gamesWon = 1; delta.imposterWins = 1; }
         }
-        StatsManager.update(playerId, delta);
+        await StatsManager.update(playerId, delta);
     }
     GameManager.delete(game.channelId);
 }

@@ -12,7 +12,7 @@ module.exports = {
         .setDescription("Show the top 10 players"),
 
     async execute(ctx) {
-        const all = StatsManager.getAll();
+        const all = await StatsManager.getAll();
 
         if (Object.keys(all).length === 0) {
             return reply(ctx, { content: "❌ No stats recorded yet. Play some games first!", ephemeral: true });

@@ -1,34 +1,31 @@
-const fs   = require("fs");
-const path = require("path");
+const { collection } = require("../db/connect");
 
-const INVITES_FILE = path.join(__dirname, "../data/invites.json");
+// Collection: invites — docs shaped { _id: userId, count: Number }
+const col = () => collection("invites");
 
+// Runtime-only snapshot of guild invite uses (not persisted)
 const inviteCache = new Map();
 
-function loadData() {
-    if (!fs.existsSync(INVITES_FILE)) return {};
-    try { return JSON.parse(fs.readFileSync(INVITES_FILE, "utf8")); }
-    catch { return {}; }
+async function getInviteCount(userId) {
+    const doc = await col().findOne({ _id: userId });
+    return doc?.count ?? 0;
 }
 
-function saveData(data) {
-    fs.writeFileSync(INVITES_FILE, JSON.stringify(data, null, 2));
-}
-
-function getInviteCount(userId) {
-    const data = loadData();
-    return data[userId] ?? 0;
-}
-
-function getAllInvites() {
-    return loadData();
+/** Returns every inviter's count as a { userId: count } map. */
+async function getAllInvites() {
+    const docs = await col().find({}).toArray();
+    const map  = {};
+    for (const doc of docs) map[doc._id] = doc.count ?? 0;
+    return map;
 }
 
 /** Credit one invite to a user */
-function addInvite(inviterId) {
-    const data = loadData();
-    data[inviterId] = (data[inviterId] ?? 0) + 1;
-    saveData(data);
+async function addInvite(inviterId) {
+    await col().updateOne(
+        { _id: inviterId },
+        { $inc: { count: 1 } },
+        { upsert: true }
+    );
 }
 
 /** Cache current guild invites snapshot */
@@ -72,7 +69,7 @@ async function handleMemberJoin(member) {
 
     // Credit inviter
     if (usedInviterId) {
-        addInvite(usedInviterId);
+        await addInvite(usedInviterId);
     }
 }
 

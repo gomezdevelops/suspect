@@ -9,6 +9,7 @@ const {
     REST, Routes
 } = require("discord.js");
 
+const { connect }   = require("./db/connect");
 const GameManager   = require("./games/GameManager");
 const nextTurn      = require("./utils/nextTurn");
 const handleVote    = require("./utils/handleVote");
@@ -21,9 +22,8 @@ const { scheduleTurnTimer }        = require("./utils/startRound");
 
 const PREFIX = "=";
 
-// ── top.gg webhook secret (set in .env as TOPGG_AUTH)
-const TOPGG_AUTH    = process.env.TOPGG_AUTH ?? "";
-const WEBHOOK_PORT  = parseInt(process.env.WEBHOOK_PORT ?? "3000", 10);
+const TOPGG_AUTH   = process.env.TOPGG_AUTH ?? "";
+const WEBHOOK_PORT = parseInt(process.env.WEBHOOK_PORT ?? "3000", 10);
 
 const client = new Client({
     intents: [
@@ -76,32 +76,53 @@ client.once("clientReady", async () => {
 });
 
 // ─── top.gg Webhook server ────────────────────────────────────────────────────
-// Set up in top.gg bot page: Webhooks → URL = http://your-server-ip:3000/topgg
-// Set Authorization header to same value as TOPGG_AUTH in your .env
 http.createServer(async (req, res) => {
+    console.log(`[webhook] ${req.method} ${req.url} from ${req.socket.remoteAddress}`);
+
     if (req.method !== "POST" || req.url !== "/topgg") {
+        console.log(`[webhook] 404 — expected POST /topgg, got ${req.method} ${req.url}`);
         res.writeHead(404); res.end(); return;
     }
 
-    // Validate auth header
     const auth = req.headers["authorization"] ?? "";
     if (TOPGG_AUTH && auth !== TOPGG_AUTH) {
+        console.log(`[webhook] 401 — auth mismatch (got len=${auth.length}, expected len=${TOPGG_AUTH.length})`);
         res.writeHead(401); res.end(); return;
     }
 
     let body = "";
     req.on("data", chunk => { body += chunk; });
     req.on("end", async () => {
-        try {
-            const data = JSON.parse(body);
-            const userId = data.user;
-            if (!userId) { res.writeHead(400); res.end(); return; }
+    try {
+        const data = JSON.parse(body);
 
-            // Record vote, get rewards
-            const { shardsEarned, newStreak, newBadges } = VoteTracker.recordVote(userId);
-            const newBalance = ShardManager.addShards(userId, shardsEarned);
+        // Ignore top.gg test pings entirely
+        if (data.type === "test") {
+            console.log(`[webhook] test event ignored`);
+            res.writeHead(200); res.end("OK"); return;
+        }
 
-            // DM the voter
+        const userId = data.user ?? data.data?.user?.id ?? null;
+
+        if (!userId) {
+            console.log(`[webhook] 400 — could not extract user. body=${body}`);
+            res.writeHead(400); res.end(); return;
+        }
+
+        // Guard against duplicate webhook deliveries
+        const alreadyVoted = await VoteTracker.hasVotedRecently(userId);
+        if (alreadyVoted) {
+            console.log(`[webhook] duplicate — user ${userId} already voted recently, skipping`);
+            res.writeHead(200); res.end("OK"); return;
+        }
+
+        console.log(`[webhook] vote received from user ${userId} (type=${data.type ?? "?"})`);
+
+        const { shardsEarned, newStreak, newBadges } = await VoteTracker.recordVote(userId);
+        
+            console.log(`[webhook] recorded — +${shardsEarned} shards, streak ${newStreak}`);
+            const newBalance = await ShardManager.addShards(userId, shardsEarned);
+
             try {
                 const discordUser = await client.users.fetch(userId);
                 const badgeLine   = newBadges.length
@@ -218,7 +239,6 @@ client.on("messageCreate", async message => {
 // ─── interactionCreate — slash commands + all buttons ────────────────────────
 client.on("interactionCreate", async interaction => {
     try {
-        // Slash commands
         if (interaction.isChatInputCommand()) {
             const command = client.commands.get(interaction.commandName);
             if (!command) return;
@@ -227,18 +247,16 @@ client.on("interactionCreate", async interaction => {
         }
 
         if (interaction.isButton()) {
-            // ── Shop pagination buttons ──────────────────────────────────────
             if (interaction.customId.startsWith("shop_page_")) {
-                const page     = parseInt(interaction.customId.replace("shop_page_", ""), 10);
-                const uid      = interaction.user.id;
-                const balance  = ShardManager.getBalance(uid);
+                const page    = parseInt(interaction.customId.replace("shop_page_", ""), 10);
+                const uid     = interaction.user.id;
+                const balance = await ShardManager.getBalance(uid);
                 const { sendShopPage } = require("./commands/shop");
                 await interaction.deferUpdate();
                 await sendShopPage(interaction, uid, balance, page);
                 return;
             }
 
-            // ── Vote buttons (game voting) ───────────────────────────────────
             const game = GameManager.get(interaction.channelId);
             if (!game || game.state !== "VOTING") return;
             await handleVote(interaction, game);
@@ -260,5 +278,15 @@ client.on("nextTurn", async (ctx, game) => {
     catch (err) { console.error("nextTurn error:", err); }
 });
 
-client.login(process.env.TOKEN);
+// ─── Connect to MongoDB then login ────────────────────────────────────────────
+(async () => {
+    try {
+        await connect();
+        await client.login(process.env.TOKEN);
+    } catch (err) {
+        console.error("❌ Fatal startup error:", err);
+        process.exit(1);
+    }
+})();
+
 module.exports = client;

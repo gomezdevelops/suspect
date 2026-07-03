@@ -24,7 +24,7 @@ module.exports = {
 
         // Remove title
         if (input === "none" || input === "clear" || input === "remove") {
-            clearTitle(uid);
+            await clearTitle(uid);
             return reply(ctx, {
                 embeds: [
                     new EmbedBuilder()
@@ -34,7 +34,7 @@ module.exports = {
             });
         }
 
-        const owned = getOwnedTitles(uid);
+        const owned = await getOwnedTitles(uid);
 
         // Match by id or partial label
         const match = owned.find(t =>
@@ -59,7 +59,7 @@ module.exports = {
             });
         }
 
-        setActiveTitle(uid, match.id);
+        await setActiveTitle(uid, match.id);
 
         return reply(ctx, {
             embeds: [
